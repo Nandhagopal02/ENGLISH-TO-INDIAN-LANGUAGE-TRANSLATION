@@ -3,16 +3,16 @@ from transformers import MBartForConditionalGeneration, MBart50TokenizerFast
 from gtts import gTTS
 import os
 
-# Load model and tokenizer
+# Load model
 @st.cache_resource
 def load_model():
-    tokenizer = MBart50TokenizerFast.from_pretrained("facebook/mbart-large-50-one-to-many-mmt", src_lang="en_XX")
-    model = MBartForConditionalGeneration.from_pretrained("facebook/mbart-large-50-one-to-many-mmt")
+    tokenizer = MBart50TokenizerFast.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+    model = MBartForConditionalGeneration.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
     return tokenizer, model
 
 tokenizer, model = load_model()
 
-# Language codes
+# Language map
 indian_languages = {
     "Hindi": "hi_IN",
     "Tamil": "ta_IN",
@@ -27,30 +27,33 @@ indian_languages = {
 }
 
 # UI
-st.title("🇮🇳 English to Indian Language Translator with Voice")
-text = st.text_area("Enter English text:")
+st.title("🌐 English to Indian Language Translator with Voice")
+text = st.text_area("Enter English text here:")
 
-lang = st.selectbox("Choose a target language:", list(indian_languages.keys()))
+lang = st.selectbox("Choose a target language", list(indian_languages.keys()))
 
 if st.button("Translate"):
-    if not text.strip():
-        st.warning("Please type something to translate.")
+    if text.strip() == "":
+        st.warning("Please enter some text first.")
     else:
-        tgt_lang_code = indian_languages[lang]
-        encoded = tokenizer(text, return_tensors="pt")
-        translated = model.generate(
-            **encoded,
-            forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang_code]
-        )
-        result = tokenizer.decode(translated[0], skip_special_tokens=True)
-        st.success(f"Translation in {lang}:")
-        st.write(result)
-
-        # Voice output
         try:
-            tts = gTTS(result, lang=tgt_lang_code[:2])
-            tts.save("speech.mp3")
-            st.audio("speech.mp3", format="audio/mp3")
-            os.remove("speech.mp3")
+            tokenizer.src_lang = "en_XX"
+            inputs = tokenizer(text, return_tensors="pt")
+            tgt_lang_code = indian_languages[lang]
+            generated_tokens = model.generate(
+                **inputs,
+                forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang_code]
+            )
+            translation = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+
+            st.success(f"✅ Translation in {lang}:")
+            st.write(translation)
+
+            # Voice Output
+            tts = gTTS(translation, lang=tgt_lang_code[:2])
+            tts.save("output.mp3")
+            st.audio("output.mp3")
+            os.remove("output.mp3")
+
         except Exception as e:
-            st.error(f"Speech error: {e}")
+            st.error(f"Translation failed: {e}")
