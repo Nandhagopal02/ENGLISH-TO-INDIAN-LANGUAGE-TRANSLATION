@@ -1,10 +1,9 @@
 import streamlit as st
 from transformers import MBartForConditionalGeneration, MBart50TokenizerFast
 from gtts import gTTS
-import torch
 import os
 
-# Load model & tokenizer
+# Load model and tokenizer
 @st.cache_resource
 def load_model():
     tokenizer = MBart50TokenizerFast.from_pretrained("facebook/mbart-large-50-one-to-many-mmt", src_lang="en_XX")
@@ -13,7 +12,7 @@ def load_model():
 
 tokenizer, model = load_model()
 
-# Indian language code map
+# Language codes
 indian_languages = {
     "Hindi": "hi_IN",
     "Tamil": "ta_IN",
@@ -27,42 +26,31 @@ indian_languages = {
     "Urdu": "ur_IN"
 }
 
-# Streamlit UI
+# UI
 st.title("🇮🇳 English to Indian Language Translator with Voice")
-st.write("Translate English → Indian Languages and hear the result spoken aloud.")
+text = st.text_area("Enter English text:")
 
-text_input = st.text_area("✍️ Enter English text to translate", height=150)
-target_language = st.selectbox("🌐 Choose your target Indian language", list(indian_languages.keys()))
+lang = st.selectbox("Choose a target language:", list(indian_languages.keys()))
 
 if st.button("Translate"):
-    if not text_input.strip():
-        st.warning("Please enter some text.")
+    if not text.strip():
+        st.warning("Please type something to translate.")
     else:
-        # Translation
-        target_lang_code = indian_languages[target_language]
-        inputs = tokenizer(text_input, return_tensors="pt")
-        translated_tokens = model.generate(
-            **inputs,
-            forced_bos_token_id=tokenizer.lang_code_to_id[target_lang_code]
+        tgt_lang_code = indian_languages[lang]
+        encoded = tokenizer(text, return_tensors="pt")
+        translated = model.generate(
+            **encoded,
+            forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang_code]
         )
-        translated_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
+        result = tokenizer.decode(translated[0], skip_special_tokens=True)
+        st.success(f"Translation in {lang}:")
+        st.write(result)
 
-        # Show text output
-        st.success(f"🈯 Translation in {target_language}:")
-        st.write(translated_text)
-
-        # Generate speech with gTTS
+        # Voice output
         try:
-            tts = gTTS(text=translated_text, lang=target_lang_code[:2])  # e.g., 'ta' from 'ta_IN'
-            audio_file = f"tts_{target_lang_code}.mp3"
-            tts.save(audio_file)
-
-            # Play audio
-            audio_bytes = open(audio_file, "rb").read()
-            st.audio(audio_bytes, format="audio/mp3")
-
-            # Clean up
-            os.remove(audio_file)
+            tts = gTTS(result, lang=tgt_lang_code[:2])
+            tts.save("speech.mp3")
+            st.audio("speech.mp3", format="audio/mp3")
+            os.remove("speech.mp3")
         except Exception as e:
-            st.error(f"❌ TTS failed: {e}")
-            st.info("Not all languages are supported by gTTS. Try Hindi, Tamil, etc.")
+            st.error(f"Speech error: {e}")
